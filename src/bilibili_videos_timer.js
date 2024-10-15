@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         bilibili_videos_timer
 // @namespace    https://github.com/Peilin-zzz-Eric/bilibili_videos_timer
-// @version      0.3
+// @version      0.4
 // @license      MIT
 // @description  View Bilibili video collection time information: total duration, watched duration, remaining duration, watched proportion and real-time progress;
 // @author       Eric zzz
@@ -99,7 +99,6 @@
         return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
     }
 
-
     // 2. DOM related operations
     // Create and style the container for the icon
     const iconContainer = document.createElement("div");
@@ -116,8 +115,8 @@
     icon.height = 30;
 
     // Append the icon to its container and the container to the body
-    iconContainer.appendChild(icon);
-    document.body.appendChild(iconContainer);
+    //iconContainer.appendChild(icon);
+    //document.body.appendChild(iconContainer);
 
     // Create the span to display the video progress information
     var span = document.createElement("div");
@@ -132,15 +131,24 @@
     span.style.cursor = "pointer";
     span.id = "my_time_info";
 
-    // Append the span to the body
-    document.body.appendChild(span);
+    function getTargetElement(){
+        let targetElement = document.querySelector(".video-pod__list");
+        return targetElement;
+    }
 
+    let targetElement = getTargetElement();
+    if(targetElement){
+        iconContainer.appendChild(icon);
+        document.body.appendChild(iconContainer);
+        document.body.appendChild(span);
+    }
 
     // 3. Update and monitor video playback progress logic
     let totalTime = "0:0:0";  // Total time of the video collection
     let watchedTime = "0:0:0";  // Time already watched
 
     // Utility function to get element by XPath
+    //Return all matching nodes, stored in the order they appear in the document
     function getElementsByXPath(parent, xpath) {
         let elements = [];
         const result = document.evaluate(xpath, parent, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
@@ -150,6 +158,7 @@
         return elements;
     }
 
+    //Return the first matching node
     function getElementByXPath(parent, xpath) {
         const result = document.evaluate(xpath, parent, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
         return result.singleNodeValue;
@@ -158,20 +167,8 @@
     // Update the total and watched time information
     function update_time_info() {
         let elements = [];
-        const Dom_1 = document.getElementById("multi_page");
-        const Dom_2 = document.getElementsByClassName("video-section-list");
-
-        // If using the structure DOM_1
-        if (Dom_1) {
-            const xpathExpression = "//*[@id='multi_page']//ul[@class='list-box']/li";
-            elements = getElementsByXPath(document, xpathExpression);
-
-        }else if (Dom_2) {
-            // If using the new structure DOM_2
-            const xpathExpression = "//*[contains(@class, 'video-section-list')]/div[contains(@class, 'video-episode-card')]/div[contains(@class, 'video-episode-card__info')]";
-            elements = getElementsByXPath(document, xpathExpression);
-
-        }
+        const xpathExpression = "//*[contains(@class, 'video-pod__list')]/div[contains(@class, 'video-pod__item')]";
+        elements = getElementsByXPath(document, xpathExpression);
 
         // Calculate total time and watched time
         if (elements && elements.length > 0) {
@@ -182,44 +179,23 @@
             for (let i = 0; i < elements.length; i++) {
                 const childElement = elements[i];
                 let str = "0:0:0";
-
-                if (Dom_1) {
-                    str = getElementByXPath(childElement, ".//div[@class='duration']").innerText;
-                }else if (Dom_2) {
-                    str = getElementByXPath(childElement, ".//div[@class='video-episode-card__info-duration']").innerText;
-
-                }
+                str = getElementByXPath(childElement, ".//div[contains(@class, 'stat-item') and contains(@class, 'duration')]").innerText;
                 let str_arr = str.split(":");
                 if (str_arr.length == 2) str = "0:" + str;  // Convert "mm:ss" format to "hh:mm:ss"
                 if (str_arr.length == 1) str = "0:0:" + str;  // Convert "ss" format to "hh:mm:ss"
 
                 date = addTime(date, str);  // Add the duration to the total time
 
-
                 // Check if this is the currently playing video
-                if (childElement.classList.contains("on") || childElement.classList.contains("video-episode-card__info-playing")) {
+                if (childElement.classList.contains('active') || childElement.querySelector('.active')) {
                     Pasedate = date;
                     onDate = str;
                 }
             }
             totalTime = date;
             watchedTime = subtractTime(Pasedate, onDate);
-
-            // Calculate watched percentage and remaining time
-            const percentageWatched = calculatePercentage(watchedTime, totalTime);
-            const remainingTime = subtractTime(totalTime, watchedTime);
-
-            // Get current video's play progress
-            const video = document.querySelector("video");
-            let currentTime = "0:0:0";
-            let videoDuration = "0:0:0";
-
-            // Display the information in the span
-            var time_info = `总长：${totalTime}\n已看：${watchedTime}\n剩余：${remainingTime}\n已看占比：${percentageWatched}\n实时进度：${currentTime} / ${videoDuration}`;
-            span.innerText = time_info;
         }
     }
-
 
     let videoEventListener = null;  // Store event listener for video time updates
 
@@ -251,7 +227,7 @@
                         console.log("Video ended, listener removed.");
                     } else {
                         // Otherwise continue updating span.innerText
-                        span.innerText = `总长：${totalTime}\n已看：${updatedWatchedTime}\n剩余：${remainingTime}\n已看占比：${percentageWatched}\n实时进度：${currentFormatted} / ${videoDuration}`;
+                        var time_info = `总长：${totalTime}\n已看：${updatedWatchedTime}\n剩余：${remainingTime}\n已看占比：${percentageWatched}\n实时进度：${currentFormatted} / ${videoDuration}`;
                         span.innerText = time_info;
                     }
                 }
@@ -259,7 +235,6 @@
             video.addEventListener("timeupdate", videoEventListener);  // Listen for time updates on the video
         }
     }
-
 
     // 4. Event binding logic
     let isVisible = false;  // Track if the info display is visible
@@ -278,35 +253,25 @@
         isVisible = !isVisible;  // Toggle visibility state
     });
 
-
-
     // Remove the time update event listener from the video
     function removeVideoTimeMonitor() {
         const video = document.querySelector("video");
         if (video && videoEventListener) {
             video.removeEventListener("timeupdate", videoEventListener);
             videoEventListener = null;  // Reset the listener
-
-
         }
     }
-
-
 
     // 5. MutationObserver listener
     // Use MutationObserver to watch for DOM changes (for video collections) and refresh data
     const observer = new MutationObserver((mutationsList) => {
-        let multi_list = document.querySelector(".multi-page-v1");
-        let video_section_list = document.querySelector(".video-section-list.section-0");
-        let targetElement = multi_list || video_section_list;
+        let targetElement = getTargetElement();
 
         if (!targetElement) {
             console.log("Target element not found. Stopping script.");
             span.innerText = "";
-            removeVideoTimeMonitor();
-            removeVideoEndMonitor();
             iconContainer.style.display = "none";
-
+            removeVideoTimeMonitor();
         } else {
             console.log("Target element found. Restarting script.");
             iconContainer.style.display = "block";
@@ -316,20 +281,28 @@
                 let targetElementChanged = false;
 
                 // Iterate over the MutationObserver mutationsList
-                mutationsList.forEach((mutation) => {
-
-                    // Check for attribute changes, particularly class changes
-                    if (mutation.type === "attributes" && mutation.attributeName === "class") {
+                // Listen for the addition, removal, or reordering of child nodes
+                // When the entire targetElement is replaced, the attributes of the new targetElement cannot be observed
+                // The issue of refreshing the time when switching between different video collections has been resolved
+                for (let mutation of mutationsList) {
+                    if (mutation.type === "childList") {
                         const targetNode = mutation.target;
-
-                        // Check if targetNode is a child of targetElement and its class has changed
-                        if (targetElement.contains(targetNode) && (targetNode.tagName === 'LI' || targetNode.classList.contains("video-episode-card__info"))) {
-                            if(targetNode.classList.contains("on") || targetNode.classList.contains("video-episode-card__info-playing")){
-                                targetElementChanged = true;
-                            }
+                        if (targetElement.contains(targetNode)) {
+                            console.log("Child list changed, re-checking target element.");
+                            targetElementChanged = true;
+                            break;  //Exit the loop immediately after detecting the first change
                         }
                     }
-                });
+                    // Listen for changes in the attributes of the child elements of the targetElement
+                    if (mutation.type === "attributes" && mutation.attributeName === "class") {
+                        const targetNode = mutation.target;
+                        if (targetElement.contains(targetNode) && targetNode.classList.contains("active")) {
+                            console.log("Class changed on element: ", targetNode);
+                            targetElementChanged = true;
+                            break;  //Exit the loop immediately after detecting the first change
+                        }
+                    }
+                }
 
                 if (targetElementChanged) {
                     update_time_info();
@@ -343,7 +316,5 @@
     // Configure MutationObserver to monitor child node changes and attribute changes
     var targetElementParent = document.querySelector(".right-container-inner");
     observer.observe(targetElementParent, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
-
-
 
 })();
