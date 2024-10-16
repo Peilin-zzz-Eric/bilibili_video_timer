@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         bilibili_videos_timer
 // @namespace    https://github.com/Peilin-zzz-Eric/bilibili_videos_timer
-// @version      0.4
+// @version      0.5
 // @license      MIT
 // @description  View Bilibili video collection time information: total duration, watched duration, remaining duration, watched proportion and real-time progress;
 // @author       Eric zzz
@@ -103,44 +103,42 @@
     // Create and style the container for the icon
     const iconContainer = document.createElement("div");
     iconContainer.style.position = "fixed";
-    iconContainer.style.bottom = "250px";
-    iconContainer.style.left = "20px";
-    iconContainer.style.padding = "0px";
+    iconContainer.style.bottom = "25vh";
+    iconContainer.style.left = "2vh";
     iconContainer.style.cursor = "pointer";
 
     // Create and style the icon itself
     const icon = document.createElement("img");
     icon.src = "https://raw.githubusercontent.com/Peilin-zzz-Eric/bilibili_videos_timer/main/icon/timer.svg";
-    icon.width = 30;
-    icon.height = 30;
-
-    // Append the icon to its container and the container to the body
-    //iconContainer.appendChild(icon);
-    //document.body.appendChild(iconContainer);
+    icon.style.width = "3vh";
+    icon.style.height = "3vh";
 
     // Create the span to display the video progress information
     var span = document.createElement("div");
     span.innerText = "";
     span.style.position = "fixed";
-    span.style.bottom = "140px";
-    span.style.left = "10px";
-    span.style.padding = "10px";
+    span.style.bottom = "15vh";
+    span.style.left = "2vh";
     span.style.color = "black";
     span.style.border = "none";
     span.style.borderRadius = "5px";
     span.style.cursor = "pointer";
+    span.style.fontSize = "0.55vw";
     span.id = "my_time_info";
 
+    //Get target element
     function getTargetElement(){
         let targetElement = document.querySelector(".video-pod__list");
         return targetElement;
     }
-
     let targetElement = getTargetElement();
+    let isAppend = true; //Check if elements are added
+    // Append the icon to its container and the container to the body
     if(targetElement){
         iconContainer.appendChild(icon);
         document.body.appendChild(iconContainer);
         document.body.appendChild(span);
+        isAppend = false;
     }
 
     // 3. Update and monitor video playback progress logic
@@ -197,42 +195,61 @@
         }
     }
 
-    let videoEventListener = null;  // Store event listener for video time updates
+    let time_info = ""; //Timestamp for time information
+    //Update real-time time
+    function realtime_update_time_info(){
+        const video = document.querySelector("video");
+        if (video){
+            const currentTime = video.currentTime;
+            const duration = video.duration;
+            let videoDuration = "未知时长";
+            let realTimePercentage = "0%";
+            if (!isNaN(currentTime) && !isNaN(duration)) {
+                const currentFormatted = formatSecondsToTime(currentTime);
+                if (!isNaN(duration)) {
+                    videoDuration = formatSecondsToTime(duration);
+                    realTimePercentage = ((currentTime / duration) * 100).toFixed(2) + "%";
+                }
 
-    // Update video time information based on current video state
-    function monitorVideoTime() {
+                // Update watched time and calculate remaining time
+                const updatedWatchedTime = addTime(watchedTime, formatSecondsToTime(currentTime));
+                const remainingTime = subtractTime(totalTime, updatedWatchedTime);
+                const percentageWatched = calculatePercentage(updatedWatchedTime, totalTime);
+                time_info = `总长：${totalTime}\n已看：${updatedWatchedTime}\n剩余：${remainingTime}\n已看占比：${percentageWatched}\n实时进度：${currentFormatted} / ${videoDuration}`;
+            }
+        }
+    }
+
+    let videoEventListener = null;  // Store event listener for video time updates
+    let videoPasueListener = null;  // Store event listener for video time pause
+    function monitorVideoTime(){
         const video = document.querySelector("video");
         if (video && !videoEventListener){
+            //Listen for video time updates
             videoEventListener = () => {
-                const currentTime = video.currentTime;
-                const duration = video.duration;
-                let videoDuration = "未知时长";
-                let realTimePercentage = "0%";
-
-                if (!isNaN(currentTime) && !isNaN(duration)) {
-                    const currentFormatted = formatSecondsToTime(currentTime);
-                    if (!isNaN(duration)) {
-                        videoDuration = formatSecondsToTime(duration);
-                        realTimePercentage = ((currentTime / duration) * 100).toFixed(2) + "%";
-                    }
-
-                    // Update watched time and calculate remaining time
-                    const updatedWatchedTime = addTime(watchedTime, formatSecondsToTime(currentTime));
-                    const remainingTime = subtractTime(totalTime, updatedWatchedTime);
-                    const percentageWatched = calculatePercentage(updatedWatchedTime, totalTime);
-
-                    // Update the span with the new information
-                    if (video.ended) {
-                        removeVideoTimeMonitor();  // Remove listener
-                        console.log("Video ended, listener removed.");
-                    } else {
-                        // Otherwise continue updating span.innerText
-                        var time_info = `总长：${totalTime}\n已看：${updatedWatchedTime}\n剩余：${remainingTime}\n已看占比：${percentageWatched}\n实时进度：${currentFormatted} / ${videoDuration}`;
-                        span.innerText = time_info;
-                    }
+                //Remove the listener when the video ends
+                //To prevent realtime_update_time_info() from updating before update_time_info() finishes updating watchedTime, leading to a rollback issue
+                if (video.ended) {
+                    removeVideoTimeMonitor();
+                    console.log("Video ended, listener removed.");
+                } else {
+                    realtime_update_time_info();
+                    span.innerText = time_info;
                 }
             };
-            video.addEventListener("timeupdate", videoEventListener);  // Listen for time updates on the video
+            video.addEventListener("timeupdate", videoEventListener);
+        }
+
+    }
+    //Listen for video pause
+    function monitorVideoPause(){
+        const video = document.querySelector("video");
+        if (video && !videoPasueListener){
+            videoPasueListener = () => {
+                realtime_update_time_info();
+
+            };
+            video.addEventListener("pause", videoPasueListener);
         }
     }
 
@@ -246,9 +263,8 @@
             span.innerText = "";
             removeVideoTimeMonitor();
         } else {
-            // Update and show time info
-            update_time_info();
             monitorVideoTime();
+            span.innerText = time_info;
         }
         isVisible = !isVisible;  // Toggle visibility state
     });
@@ -261,6 +277,13 @@
             videoEventListener = null;  // Reset the listener
         }
     }
+    function removeVideoPauseMonitor() {
+        const video = document.querySelector("video");
+        if (video && videoPasueListener) {
+            video.removeEventListener("pause", videoPasueListener);
+            videoPasueListener = null;  // Reset the listener
+        }
+    }
 
     // 5. MutationObserver listener
     // Use MutationObserver to watch for DOM changes (for video collections) and refresh data
@@ -271,43 +294,55 @@
             console.log("Target element not found. Stopping script.");
             span.innerText = "";
             iconContainer.style.display = "none";
+            isVisible = false;
             removeVideoTimeMonitor();
+            removeVideoPauseMonitor();
         } else {
+            if(isAppend){
+                iconContainer.appendChild(icon);
+                document.body.appendChild(iconContainer);
+                document.body.appendChild(span);
+                isAppend = false;
+            }
             console.log("Target element found. Restarting script.");
             iconContainer.style.display = "block";
 
-            // When isVisible is true and targetElement has changed
-            if (isVisible) {
-                let targetElementChanged = false;
+            let targetElementChanged = false;
 
-                // Iterate over the MutationObserver mutationsList
-                // Listen for the addition, removal, or reordering of child nodes
-                // When the entire targetElement is replaced, the attributes of the new targetElement cannot be observed
-                // The issue of refreshing the time when switching between different video collections has been resolved
-                for (let mutation of mutationsList) {
-                    if (mutation.type === "childList") {
-                        const targetNode = mutation.target;
-                        if (targetElement.contains(targetNode)) {
-                            console.log("Child list changed, re-checking target element.");
-                            targetElementChanged = true;
-                            break;  //Exit the loop immediately after detecting the first change
-                        }
-                    }
-                    // Listen for changes in the attributes of the child elements of the targetElement
-                    if (mutation.type === "attributes" && mutation.attributeName === "class") {
-                        const targetNode = mutation.target;
-                        if (targetElement.contains(targetNode) && targetNode.classList.contains("active")) {
-                            console.log("Class changed on element: ", targetNode);
-                            targetElementChanged = true;
-                            break;  //Exit the loop immediately after detecting the first change
-                        }
+            // Iterate over the MutationObserver mutationsList
+            // Listen for the addition, removal, or reordering of child nodes
+            // When the entire targetElement is replaced, the attributes of the new targetElement cannot be observed
+            // The issue of refreshing the time when switching between different video collections has been resolved
+            for (let mutation of mutationsList) {
+                if (mutation.type === "childList") {
+                    const targetNode = mutation.target;
+                    //targetElement.contains(targetNode) captures changes from collection to collection
+                    //targetNode.classList.contains("active") captures changes from a single video to a collection
+                    if (targetElement.contains(targetNode)||targetNode.contains(targetElement)) {
+                        console.log("Child list changed, re-checking target element.");
+                        targetElementChanged = true;
+                        break;  //Exit the loop immediately after detecting the first change
                     }
                 }
-
-                if (targetElementChanged) {
-                    update_time_info();
+                // Listen for changes in the attributes of the child elements of the targetElement
+                if (mutation.type === "attributes" && mutation.attributeName === "class") {
+                    const targetNode = mutation.target;
+                    if (targetElement.contains(targetNode) && targetNode.classList.contains("active")) {
+                        console.log("Class changed on element: ", targetNode);
+                        targetElementChanged = true;
+                        break;  //Exit the loop immediately after detecting the first change
+                    }
+                }
+            }
+            if (targetElementChanged) {
+                update_time_info();
+                monitorVideoPause();
+                if(!isVisible){
+                    //During video pause, perform a video seek and reset the previously stored pause time record
+                    time_info = "";
+                }else if(isVisible){
+                    //The updatetime listener is removed when the video ends. When the video automatically plays the next video and the timestamp is displayed, reattach the listener
                     monitorVideoTime();
-                    console.log("Target element has changed.");
                 }
             }
         }
