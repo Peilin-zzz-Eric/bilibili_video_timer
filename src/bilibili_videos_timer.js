@@ -4,7 +4,7 @@
 // @version      0.5
 // @license      MIT
 // @description  View Bilibili video collection time information: total duration, watched duration, remaining duration, watched proportion and real-time progress;
-// @author       Eric zzz
+// @author       ezchill
 // @match        https://www.bilibili.com/video/*
 // @icon         https://raw.githubusercontent.com/Peilin-zzz-Eric/bilibili_videos_timer/main/icon/timer.svg
 // @grant        none
